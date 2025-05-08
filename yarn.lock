@@ -1656,19 +1656,6 @@ strip-json-comments@^3.1.0, strip-json-comments@^3.1.1:
   resolved "https://registry.npmjs.org/strip-json-comments/-/strip-json-comments-3.1.1.tgz"
   integrity sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==
 
-"supervising_bot@file:":
-  version "1.0.0"
-  resolved "file:"
-  dependencies:
-    axios "^1.7.8"
-    dotenv "^16.0.3"
-    express "^4.19.2"
-    mongodb "^6.8.0"
-    openai "^4.52.7"
-    redis "^4.7.0"
-    supervising_bot "file:"
-    telegraf "^4.16.3"
-
 supports-color@^7.1.0:
   version "7.2.0"
   resolved "https://registry.npmjs.org/supports-color/-/supports-color-7.2.0.tgz"

@@ -9,30 +9,59 @@ dotenv.config();
 
 const TELEGRAM_BOT_TOKEN = process.env.TOKEN;
 
-const client = new OpenAI({ apiKey: process.env.GPT }),
-  API_URL = 'https://api.openai.com/v1',
-  HEADERS = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${process.env.GPT}`,
-    'OpenAI-Beta': 'assistants=v2',
-  };
+const client = new OpenAI({ apiKey: process.env.GPT });
+
+function prompt(question?: string){
+  return `Ты ассистент, который дает структурированную информацию для постинга продаж автомобилей, твоя задача с полученых изображений и текста пользователя
+  составить строго следующий текст, без лишних слов и предложений (это пример):
+  "FOR SALE: 2026 CADILLAC VISTIQ SPORT (Electric)
+  
+  ODOMETR: 8km
+  
+  PRICE: $97,300 plus taxes"
+  
+  Также ты должен учитывать язык на котором пишет пользователь и дать этот ответ в том же языке.
+
+  Если нету текста пользователя, опирайся только на изображения. Если нету изображений, то опирайся только на тексте пользователя.
+  Если некоторых данных нету ни на изображении, ни в тексте, просто не давай эту информацию, либо оставь в самом конце отметку каких данных нет.
+  
+  Текст пользователя: ${question ?? ''}`
+}
+
+function parseHtmlToText(html: string): string {
+  let text = html;
+
+  text = text.replace(/<\/?[^>]+(>|$)/g, "");
+
+  text = text.replace(/<br\s*\/?>/g, "\n");
+
+  text = text.replace(/<b>|<strong>/g, "**");
+  text = text.replace(/<\/b>|<\/strong>/g, "**");
+
+  text = text.replace(/<i>|<em>/g, "*");
+  text = text.replace(/<\/i>|<\/em>/g, "*");
+
+  text = text.replace(/<a\s+href="([^"]+)">([^<]+)<\/a>/g, "[$2]($1)");
+
+  text = text.replace(/<ul>|<ol>/g, "");
+  text = text.replace(/<\/ul>|<\/ol>/g, "");
+  text = text.replace(/<li>/g, "- ");
+  
+  return text;
+}
+
 
 export async function downloadTelegramFile(fileId: string, saveDir = "temp"): Promise<string> {
-    // 1. Получаем путь к файлу
     const fileInfo = await axios.get(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`);
     const filePath = fileInfo.data.result.file_path;
 
-    // 2. Создаём URL для скачивания
     const downloadUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
 
-    // 3. Указываем путь, куда сохранить файл
     const fileName = path.basename(filePath);
     const localFilePath = path.join(saveDir, fileName);
 
-    // Убедиться, что папка существует
     fs.mkdirSync(saveDir, { recursive: true });
 
-    // 4. Скачиваем и сохраняем файл
     const response = await axios.get(downloadUrl, { responseType: "stream" });
     const writer = createWriteStream(localFilePath);
 
@@ -77,8 +106,10 @@ export async function transcribeAudio(audioId: string): Promise<string | null> {
   }
 }
 
-export async function analyzeImages(filePaths: string[], question: string): Promise<string | null> {
+export async function analyzeImages(fileIds: string[], question?: string): Promise<string | null> {
     try {
+      const filePaths = await Promise.all(fileIds.map(item =>downloadTelegramFile(item)));
+
       if (filePaths.length > 20) {
         throw new Error("Можно отправить максимум 20 изображений за раз.");
       }
@@ -98,7 +129,7 @@ export async function analyzeImages(filePaths: string[], question: string): Prom
         {
           role: "user",
           content: [
-            { type: "text", text: question },
+            { type: "text", text: prompt(question) },
             ...imageContents,
           ],
         },
@@ -107,7 +138,7 @@ export async function analyzeImages(filePaths: string[], question: string): Prom
       const response = await axios.post(
         "https://api.openai.com/v1/chat/completions",
         {
-          model: "gpt-4-vision-preview",
+          model: "gpt-4o-mini",
           messages,
           max_tokens: 1500,
         },
@@ -118,8 +149,18 @@ export async function analyzeImages(filePaths: string[], question: string): Prom
           },
         }
       );
+
+      filePaths.forEach((path) => {
+        fs.unlink(path, (err) => {
+          if (err) {
+            console.error(`Error deleting file: ${err}`);
+          } else {
+            console.log(`File ${path} deleted.`);
+          }
+        });
+      });
   
-      return response.data.choices[0].message.content;
+      return response.data.choices[0].message.content ? parseHtmlToText(response.data.choices[0].message.content) : null;
     } catch (error) {
       console.error("Ошибка при анализе изображений:", error);
       return null;

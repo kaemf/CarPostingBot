@@ -6,6 +6,10 @@ export default async function Start(bot: Telegraf<Context<Update>>, db: any) {
   bot.start(async (ctx) => {
     console.log('\n\nBOT STARTED (Pressed /start button)');
 
+    await db.set(ctx.chat.id)('photos')('');
+    await db.set(ctx.chat.id)('textContent')('');
+    await db.set(ctx.chat.id)('finalResult')('');
+
     const username = ctx.chat.type === "private" ? ctx.chat.username ?? null : null;
     await db.set(ctx.chat.id)('username')(username ?? 'unknown');
     await db.set(ctx.chat.id)('id')(ctx.chat.id.toString());

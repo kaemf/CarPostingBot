@@ -25,7 +25,7 @@ export default async function arch() {
         console.log(`\nTYPE: ONTEXTMESSAGE, NUMBER&TEXT = UNDEFINED, NUMBER GET = ${message.contact.phone_number} by ${message.contact.first_name}, CODE: 0\nstate: ${startState}, message: ${message.contact.phone_number}`);
       }
       else if ('photo' in message) {
-        action(ctx, user, set, { phone_number: [ '' ], text: '', photo: [ message.photo[0].file_id, message?.caption ?? '' ], file: [ '' ], stickers: '', video: [ '' ], location: [ -1 ], polls: '', voice: '', audio: '', video_circle: '' });
+        action(ctx, user, set, { phone_number: [ '' ], text: '', photo: [ message.photo.at(-1)!.file_id, message?.caption ?? '', message?.media_group_id ?? '' ], file: [ '' ], stickers: '', video: [ '' ], location: [ -1 ], polls: '', voice: '', audio: '', video_circle: '' });
         console.log(`(!)TYPE: ONTEXTMESSAGE, NUMBER&TEXT = UNDEFINED, PHOTO GET, CODE: 2\n`);
       }
       else if ('document' in message) {
@@ -62,7 +62,7 @@ export default async function arch() {
       }
     }
     else return next();
-    console.log('[@', user['username'], '], ', '( id:', id, ')', user);
+    console.log('[@', user['username'], '], ', '( id:', id, ')', '( state:', user['state'], ')', user);
   });
 
   return [onTextMessage, bot, db] as const;
