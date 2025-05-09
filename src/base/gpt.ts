@@ -11,19 +11,42 @@ const TELEGRAM_BOT_TOKEN = process.env.TOKEN;
 
 const client = new OpenAI({ apiKey: process.env.GPT });
 
-function prompt(question?: string){
+function promptJSON(question?: string){
   return `Ты ассистент, который дает структурированную информацию для постинга продаж автомобилей, твоя задача с полученых изображений и текста пользователя
   составить строго следующий текст, без лишних слов и предложений (это пример):
-  "FOR SALE: 2026 CADILLAC VISTIQ SPORT (Electric)
-  
-  ODOMETR: 8km
-  
-  PRICE: $97,300 plus taxes"
-  
-  Также ты должен учитывать язык на котором пишет пользователь и дать этот ответ в том же языке.
 
-  Если нету текста пользователя, опирайся только на изображения. Если нету изображений, то опирайся только на тексте пользователя.
-  Если некоторых данных нету ни на изображении, ни в тексте, просто не давай эту информацию, либо оставь в самом конце отметку каких данных нет.
+  Ты API, которая отдает ответ исключительно в JSON формате. Твоя задача состоит в том, чтобы с помощью полученых изображений и текста пользователя составить JSON,
+  который содержит следующие поля:
+  Body type
+  Year
+  Mileage
+  Price
+  Make
+  Model
+  Trim
+  Fuel type
+  Exterior Colour
+  Transmission
+
+  И если некоторых данных нет для полей - добавить в ключ Unknown, а если поля есть и у них есть данные - Valid
+
+  Пример результата:
+  {
+    "Valid": {
+      "Body type": "Sedan",
+      "Year": 2018,
+      "Mileage": 45000,
+      "Price": 15500,
+      "Make": "Toyota",
+      "Model": "Camry",
+      "Fuel type": "Gasoline",
+      "Transmission": "Automatic"
+    },
+    "Unknown": [
+      "Trim",
+      "Exterior Colour"
+    ]
+  }
   
   Текст пользователя: ${question ?? ''}`
 }
@@ -49,6 +72,15 @@ function parseHtmlToText(html: string): string {
   
   return text;
 }
+
+function removeJsonBackticks(input: string): string {
+  return input
+    .trim()
+    .replace(/^```json\s*/i, '') // убирает ```json в начале строки
+    .replace(/```$/i, '')        // убирает ``` в конце строки
+    .trim();                     // финальная очистка от пробелов
+}
+
 
 
 export async function downloadTelegramFile(fileId: string, saveDir = "temp"): Promise<string> {
@@ -108,7 +140,7 @@ export async function transcribeAudio(audioId: string): Promise<string | null> {
 
 export async function analyzeImages(fileIds: string[], question?: string): Promise<string | null> {
     try {
-      const filePaths = await Promise.all(fileIds.map(item =>downloadTelegramFile(item)));
+      const filePaths = await Promise.all(fileIds.filter(item => item !== "").map(item =>downloadTelegramFile(item)));
 
       if (filePaths.length > 20) {
         throw new Error("Можно отправить максимум 20 изображений за раз.");
@@ -129,7 +161,7 @@ export async function analyzeImages(fileIds: string[], question?: string): Promi
         {
           role: "user",
           content: [
-            { type: "text", text: prompt(question) },
+            { type: "text", text: promptJSON(question) },
             ...imageContents,
           ],
         },
@@ -160,7 +192,7 @@ export async function analyzeImages(fileIds: string[], question?: string): Promi
         });
       });
   
-      return response.data.choices[0].message.content ? parseHtmlToText(response.data.choices[0].message.content) : null;
+      return response.data.choices[0].message.content ? removeJsonBackticks(response.data.choices[0].message.content) : null;
     } catch (error) {
       console.error("Ошибка при анализе изображений:", error);
       return null;

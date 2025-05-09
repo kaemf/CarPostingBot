@@ -1,6 +1,5 @@
 import { Context, Telegraf } from "telegraf";
 import { Update } from "telegraf/typings/core/types/typegram"
-import keyboards from "../keyboards";
 
 export default async function Start(bot: Telegraf<Context<Update>>, db: any) {
   bot.start(async (ctx) => {
@@ -9,6 +8,7 @@ export default async function Start(bot: Telegraf<Context<Update>>, db: any) {
     await db.set(ctx.chat.id)('photos')('');
     await db.set(ctx.chat.id)('textContent')('');
     await db.set(ctx.chat.id)('finalResult')('');
+    await db.set(ctx.chat.id)('textAlreadyExists')('false');
 
     const username = ctx.chat.type === "private" ? ctx.chat.username ?? null : null;
     await db.set(ctx.chat.id)('username')(username ?? 'unknown');

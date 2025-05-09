@@ -2,6 +2,9 @@ import { Message } from "../../base/types";
 import { CheckException } from "../../base/check";
 import { analyzeImages, transcribeAudio } from "../../base/gpt";
 import Context from "telegraf/typings/context";
+import keyboards from "../keyboards";
+import UnknownFieldHandler from "../../base/unknownFieldHanlder";
+import PostSummary, { result } from "../../base/postSummary";
 
 const mediaGroupBuffer = new Map<
   string,
@@ -17,29 +20,17 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
     onTextMessage('BeginDataHandler', async (ctx, user, set, data) => {
         if (CheckException.VoiceException(data)) {
             const trans = await transcribeAudio(data.voice);
+            await set('textAlreadyExists')('true');
             await set('textContent')(trans || "");
-            await ctx.reply("Отлично! Желаете загрузить фотографии (максимум 10)?", {
-                parse_mode: 'HTML',
-                reply_markup: {
-                    keyboard: [
-                        [{ text: 'Да' }, { text: 'Нет' }]
-                    ]
-                }
-            })
+            await ctx.reply("Отлично! Желаете загрузить фотографии (максимум 10)?", keyboards.yesNo());
 
             await set('state')('LoadMoreImages?');
         }
         else if (CheckException.AudioException(data)) {
             const trans = await transcribeAudio(data.audio);
+            await set('textAlreadyExists')('true');
             await set('textContent')(trans || "");
-            await ctx.reply("Изумительно! Желаете загрузить фотографии (максимум 10)?", {
-                parse_mode: 'HTML',
-                reply_markup: {
-                    keyboard: [
-                        [{ text: 'Да' }, { text: 'Нет' }]
-                    ]
-                }
-            })
+            await ctx.reply("Изумительно! Желаете загрузить фотографии (максимум 10)?", keyboards.yesNo());
 
             await set('state')('LoadMoreImages?');
         }
@@ -50,14 +41,7 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                 await set('textContent')(data.photo[1] || "");
                 await set('photos')(data.photo[0]);
 
-                await ctx.reply(`Фотография успешно записана, вы можете загрузить ещё 9 фотографий, желаете загрузить ещё?`, {
-                    parse_mode: 'HTML',
-                    reply_markup: {
-                        keyboard: [
-                            [{ text: 'Да' }, { text: 'Нет' }]
-                        ]
-                    }
-                });
+                await ctx.reply(`Фотография успешно записана, вы можете загрузить ещё 9 фотографий, желаете загрузить ещё?`, keyboards.yesNo());
 
                 await set('state')('LoadMoreImages?');
                 return;
@@ -86,42 +70,23 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                         await ctx.deleteMessage(pre_mes.message_id);
 
                         if (result){
-                            if (user['photos'].split(",").length){
-                                await ctx.replyWithMediaGroup(images.map(item => item.fileId).map((item, index) => ({ 
-                                    type: "photo", media: item, ...(index === 0 ? { caption: result, parse_mode: "HTML" } : {})
-                                })));
-    
-                                await ctx.reply("Постить?", {
-                                    parse_mode: 'HTML',
-                                    reply_markup: {
-                                        keyboard: [
-                                            [{ text: 'Да' }, { text: 'Нет' }]
-                                        ]
-                                    }
-                                });
+                            await set('finalResult')(result);
+                                
+                            const resultJSON = JSON.parse(result);
+                            if (resultJSON.Unknown.length > 0) {
+                                await ctx.reply("Ну... как всегда без чуда, есть детали, которые вам нужно вручную заполнить, ну что же, давайте начнем.");
+                                await ctx.reply(`Пожалуйста, напишите значение для поля "${resultJSON.Unknown[0]}"`);
+                                await set('state')('DetailFix');
                             }
-                            else await ctx.reply(`${result}\n\nПостить?`, {
-                                parse_mode: 'HTML',
-                                reply_markup: {
-                                    keyboard: [
-                                        [{ text: 'Да' }, { text: 'Нет' }]
-                                    ]
-                                }
-                            });
-    
-                            await set('state')('PostHanlder');
+                            else {
+                                await ctx.reply("Крайне удивительно, вам очень повезло! Все поля заполнены! Теперь подтврдите постинг");
+                                await PostSummary(user['photos'], set, ctx, result, { missedField: resultJSON.Unknown[0], value: data.text });
+                            }
                         }
                         else await ctx.reply("Ошибка обработки, нажмите старт чтобы попробовать снова");
                     }
                     else{
-                        await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${10 - images.length} фотографий, желаете загрузить ещё?`, {
-                            parse_mode: 'HTML',
-                            reply_markup: {
-                                keyboard: [
-                                    [{ text: 'Да' }, { text: 'Нет' }]
-                                ]
-                            }
-                        });
+                        await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${10 - images.length} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
 
                         await set('state')('LoadMoreImages?');
                     }
@@ -136,14 +101,7 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                     if (entry) {
                         await set('textContent')(entry.captions.join(","));
                         await set('photos')(entry.photos.map(item => item.fileId).join(","));
-                        await ctx.reply(`!Фотографии успешно записаны, вы можете загрузить ещё ${10 - user['photos'].split(",").length} фотографий, желаете загрузить ещё?`, {
-                            parse_mode: 'HTML',
-                            reply_markup: {
-                                keyboard: [
-                                    [{ text: 'Да' }, { text: 'Нет' }]
-                                ]
-                            }
-                        });
+                        await ctx.reply(`!Фотографии успешно записаны, вы можете загрузить ещё ${10 - user['photos'].split(",").length} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
 
                         await set('state')('LoadMoreImages?');
                         // const result = await analyzeImages(entry.photos.map(item => item.fileId), entry.captions.join("\n"));
@@ -161,15 +119,9 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
             }
         }
         else if (CheckException.TextException(data)) {
+            await set('textAlreadyExists')('true');
             await set('textContent')(data.text);
-            await ctx.reply("Восхитительно! Желаете загрузить фотографии (максимум 10)?", {
-                parse_mode: 'HTML',
-                reply_markup: {
-                    keyboard: [
-                        [{ text: 'Да' }, { text: 'Нет' }]
-                    ]
-                }
-            })
+            await ctx.reply("Восхитительно! Желаете загрузить фотографии (максимум 10)?", keyboards.yesNo());
 
             await set('state')('LoadMoreImages?');
         }
@@ -184,36 +136,60 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                 break;
             case 'Нет':
                 const pre_mes = await ctx.reply(`Хорошо, записали, обрабатываем...`);
-                const result = await analyzeImages(user['photos'].split(","), user['textContent']);
-                if (result){
-                    await set('finalResult')(result);
 
-                    if (user['photos'].split(",").length){
-                        await ctx.replyWithMediaGroup(user['photos'].split(",").map((item, index) => ({ 
-                            type: "photo", media: item, ...(index === 0 ? { caption: result, parse_mode: "HTML" } : {})
-                        })));
-    
-                        await ctx.reply("Постить?", {
-                            parse_mode: 'HTML',
-                            reply_markup: {
-                                keyboard: [
-                                    [{ text: 'Да' }, { text: 'Нет' }]
-                                ]
-                            }
-                        });
-                    }
-                    else await ctx.reply(`${result}\n\nПостить?`, {
-                        parse_mode: 'HTML',
-                        reply_markup: {
-                            keyboard: [
-                                [{ text: 'Да' }, { text: 'Нет' }]
-                            ]
+                if (user['textAlreadyExists'] === 'true'){
+                    const result = await analyzeImages(user['photos'].split(","), user['textContent']);
+                    
+                    if (result){
+                        await set('finalResult')(result);
+                        
+                        const resultJSON = JSON.parse(result);
+                        if (resultJSON.Unknown.length > 0) {
+                            await ctx.reply("Ну... как всегда без чуда, есть детали, которые вам нужно вручную заполнить, ну что же, давайте начнем.");
+                            await ctx.reply(`Пожалуйста, напишите значение для поля "${resultJSON.Unknown[0]}"`);
+                            await set('state')('DetailFix');
                         }
-                    });
-
-                    await set('state')('PostHanlder');
+                        else {
+                            await ctx.reply("Крайне удивительно, вам очень повезло! Все поля заполнены! Теперь подтврдите постинг");
+                            await PostSummary(user['photos'], set, ctx, result, { missedField: resultJSON.Unknown[0], value: data.text });
+                        }
+                    }
+                    else await ctx.reply("Извините, но произошла ошибка, попробуйте ещё раз сначала");
                 }
-                else ctx.reply(result || "Ошибка обработки, нажмите старт чтобы попробовать снова");
+                else {
+                    await ctx.reply("Желаете добавить/дополнить детали?", keyboards.yesNo());
+                    await set('state')('AddDetails?');
+                }
+                // const result = await analyzeImages(user['photos'].split(","), user['textContent']);
+                // if (result){
+                //     await set('finalResult')(result);
+
+                //     if (user['photos'].split(",").length){
+                //         await ctx.replyWithMediaGroup(user['photos'].split(",").map((item, index) => ({ 
+                //             type: "photo", media: item, ...(index === 0 ? { caption: result, parse_mode: "HTML" } : {})
+                //         })));
+    
+                //         await ctx.reply("Постить?", {
+                //             parse_mode: 'HTML',
+                //             reply_markup: {
+                //                 keyboard: [
+                //                     [{ text: 'Да' }, { text: 'Нет' }]
+                //                 ]
+                //             }
+                //         });
+                //     }
+                //     else await ctx.reply(`${result}\n\nПостить?`, {
+                //         parse_mode: 'HTML',
+                //         reply_markup: {
+                //             keyboard: [
+                //                 [{ text: 'Да' }, { text: 'Нет' }]
+                //             ]
+                //         }
+                //     });
+
+                //     await set('state')('PostHanlder');
+                // }
+                // else ctx.reply(result || "Ошибка обработки, нажмите старт чтобы попробовать снова");
 
                 await ctx.deleteMessage(pre_mes.message_id);
 
@@ -244,46 +220,25 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
 
                     if (result){
                         await set('finalResult')(result);
-
-                        if (user['photos'].split(",").length){
-                            await ctx.replyWithMediaGroup(user['photos'].split(",").map((item, index) => ({ 
-                                type: "photo", media: item, ...(index === 0 ? { caption: result, parse_mode: "HTML" } : {})
-                            })));
-
-                            await ctx.reply("Постить?", {
-                                parse_mode: 'HTML',
-                                reply_markup: {
-                                    keyboard: [
-                                        [{ text: 'Да' }, { text: 'Нет' }]
-                                    ]
-                                }
-                            });
+                            
+                        const resultJSON = JSON.parse(result);
+                        if (resultJSON.Unknown.length > 0) {
+                            await ctx.reply("Ну... как всегда без чуда, есть детали, которые вам нужно вручную заполнить, ну что же, давайте начнем.");
+                            await ctx.reply(`Пожалуйста, напишите значение для поля "${resultJSON.Unknown[0]}"`);
+                            await set('state')('DetailFix');
                         }
-                        else await ctx.reply(result, {
-                            parse_mode: 'HTML',
-                            reply_markup: {
-                                keyboard: [
-                                    [{ text: 'Да' }, { text: 'Нет' }]
-                                ]
-                            }
-                        });
-
-                        await set('state')('PostHanlder');
+                        else {
+                            await ctx.reply("Крайне удивительно, вам очень повезло! Все поля заполнены! Теперь подтврдите постинг");
+                            await PostSummary(user['photos'], set, ctx, result, { missedField: resultJSON.Unknown[0], value: data.text });
+                        }
                     }
-                    else await ctx.reply(result || "Ошибка обработки, нажмите старт чтобы попробовать снова");
+                    else await ctx.reply("Ошибка обработки, нажмите /start чтобы попробовать снова");
                 }
                 else if (images.length <= 8) {
                     await set('textContent')(user['textContent'].split(",").concat(data.photo[1] || "").join(","));
                     await set('photos')(user['photos'].split(",").concat(data.photo[0]).join(","));
 
-                    await ctx.reply(`Вы можете загрузить ещё ${10 - (images.length + 1)} фотографий, желаете загрузить ещё?`, {
-                        parse_mode: 'HTML',
-                        reply_markup: {
-                            keyboard: [
-                                [{ text: 'Да' }, { text: 'Нет' }]
-                            ]
-                        }
-                    });
+                    await ctx.reply(`Вы можете загрузить ещё ${10 - images.length} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
 
                     await set('state')('LoadMoreImages?');
                 }
@@ -315,41 +270,22 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
 
                         if (result){
                             await set('finalResult')(result);
-
-                            if (user['photos'].split(",").length){
-                                await ctx.replyWithMediaGroup(user['photos'].split(",").map(item => ({ type: "photo", media: item, caption: result, parse_mode: 'HTML' })));
-    
-                                await ctx.reply("Постить?", {
-                                    parse_mode: 'HTML',
-                                    reply_markup: {
-                                        keyboard: [
-                                            [{ text: 'Да' }, { text: 'Нет' }]
-                                        ]
-                                    }
-                                });
+                                
+                            const resultJSON = JSON.parse(result);
+                            if (resultJSON.Unknown.length > 0) {
+                                await ctx.reply("Ну... как всегда без чуда, есть детали, которые вам нужно вручную заполнить, ну что же, давайте начнем.");
+                                await ctx.reply(`Пожалуйста, напишите значение для поля "${resultJSON.Unknown[0]}"`);
+                                await set('state')('DetailFix');
                             }
-                            else await ctx.reply(`${result}\n\nПостить?`, {
-                                parse_mode: 'HTML',
-                                reply_markup: {
-                                    keyboard: [
-                                        [{ text: 'Да' }, { text: 'Нет' }]
-                                    ]
-                                }
-                            });
-    
-                            await set('state')('PostHanlder');
+                            else {
+                                await ctx.reply("Крайне удивительно, вам очень повезло! Все поля заполнены! Теперь подтврдите постинг");
+                                await PostSummary(user['photos'], set, ctx, result, { missedField: resultJSON.Unknown[0], value: data.text });
+                            }
                         }
                         else await ctx.reply("Ошибка обработки, нажмите старт чтобы попробовать снова");
                     }
                     else{
-                        await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${10 - (user['photos'].split(",").length + images.length)} фотографий, желаете загрузить ещё?`, {
-                            parse_mode: 'HTML',
-                            reply_markup: {
-                                keyboard: [
-                                    [{ text: 'Да' }, { text: 'Нет' }]
-                                ]
-                            }
-                        });
+                        await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${10 - (user['photos'].split(",").filter(item => item !== "").length + images.length)} фотографий, желаете загрузить ещё?`, keyboards.yesNo()); // ${10 - (user['photos'].split(",").length + images.length)} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
 
                         await set('state')('LoadMoreImages?');
                     }
@@ -364,14 +300,7 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                     if (entry) {
                         await set('textContent')(user['textContent'].split(",").concat(entry.captions).join(",") || entry.captions.join(","));
                         await set('photos')(user['photos'].split(",").concat(entry.photos.map(item => item.fileId)).join(",") || entry.photos.map(item => item.fileId).join(","));
-                        await ctx.reply(`1 Фотографии успешно записаны, вы можете загрузить ещё ${10 -user['photos'].split(",").length} фотографий, желаете загрузить ещё?`, {
-                            parse_mode: 'HTML',
-                            reply_markup: {
-                                keyboard: [
-                                    [{ text: 'Да' }, { text: 'Нет' }]
-                                ]
-                            }
-                        });
+                        await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${10 - user['photos'].split(",").filter(item => item !== "").length + entry.photos.length} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
                         // const result = await analyzeImages(entry.photos.map(item => item.fileId), entry.captions.join("\n"));
                         // await entry.ctx.reply(result || "Error while processing photo group");
                         mediaGroupBuffer.delete(mediaGroupId);
@@ -395,11 +324,11 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                 if (user['photos']){
                     await ctx.telegram.sendMediaGroup(
                         "@test_channel_for_carposting",
-                        user['photos'].split(",").map((item, index) => ({
+                        user['photos'].split(",").filter(item => item !== "").map((item, index) => ({
                           type: "photo",
                           media: item,
                           ...(index === 0 ? {
-                            caption: user['finalResult'],
+                            caption: result(user['finalResult'], { missedField: "", value: user['textContent'] }),
                             parse_mode: "HTML"
                           } : {})
                         }))
@@ -426,4 +355,93 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                 break;
         }
     });
+
+    onTextMessage('AddDetails?', async (ctx, user, set, data) => {
+        switch (data.text) {
+            case "Да":
+                await ctx.reply("Отлично! Вы пишите либо записываете голосовое, мы записываем.");
+                await set('state')('AddDetails');
+                break;
+            case "Нет":
+                const pre_mes = await ctx.reply("Окей, идёт обработка, пожалуйста подождите...");
+                const result = await analyzeImages(user['photos'].split(","), user['textContent']);
+                
+                if (result){
+                    await set('finalResult')(result);
+                    
+                    const resultJSON = JSON.parse(result);
+                    if (resultJSON.Unknown.length > 0) {
+                        await ctx.reply("Ну... как всегда без чуда, есть детали, которые вам нужно вручную заполнить, ну что же, давайте начнем.");
+                        await ctx.reply(`Пожалуйста, напишите значение для поля "${resultJSON.Unknown[0]}"`);
+                        await set('state')('DetailFix');
+                    }
+                    else {
+                        await ctx.reply("Крайне удивительно, вам очень повезло! Все поля заполнены! Теперь подтврдите постинг");
+                        await PostSummary(user['photos'], set, ctx, result, { missedField: resultJSON.Unknown[0], value: data.text });
+                    }
+                }
+                else await ctx.reply("Извините, но произошла ошибка, попробуйте ещё раз сначала");
+
+                await ctx.deleteMessage(pre_mes.message_id);
+
+                break;
+            default:
+                ctx.reply("Вам нужно нажать на одну из кнопок ниже для продолжения");
+                break;
+        }
+    })
+
+    onTextMessage('AddDetails', async (ctx, user, set, data) => {
+        if (CheckException.TextException(data)) {
+            await set('textContent')(user['textContent'].split(",").concat(data.text).join(",") || data.text);
+
+            await ctx.reply("Так... замечательно! Записали. Возможно что-то ещё?", keyboards.yesNo());
+            await set('state')('AddDetails?');
+        }
+        else if (CheckException.VoiceException(data)) {
+            const trans = await transcribeAudio(data.voice);
+            if (trans){
+                await set('textContent')(user['textContent'].split(",").concat(trans).join(",") || trans);
+    
+                await ctx.reply("Так... замечательно! Записали. Возможно что-то ещё?", keyboards.yesNo());
+                await set('state')('AddDetails?');
+            }
+            else ctx.reply("Приносим свои извинения, возникла ошибка при обработке, попробуйте ещё раз!");
+        }
+        else if (CheckException.AudioException(data)) {
+            const trans = await transcribeAudio(data.audio);
+            if (trans){
+                await set('textContent')(user['textContent'].split(",").concat(trans).join(",") || trans);
+    
+                await ctx.reply("Так... замечательно! Записали. Возможно что-то ещё?", keyboards.yesNo());
+                await set('state')('AddDetails?');
+            }
+            else ctx.reply("Приносим свои извинения, возникла ошибка при обработке, попробуйте ещё раз!");
+        }
+        else ctx.reply("Ой... здесь нужно именно писать либо записывать голосовое, вы скорее всего ошиблись. Попробуйте снова!")
+    })
+
+    onTextMessage('DetailFix', async (ctx, user, set, data) => {
+        if (CheckException.TextException(data)) {
+            const resultJSON = JSON.parse(user['finalResult']);
+
+            if (resultJSON.Unknown.length > 0) {
+                await UnknownFieldHandler(set, user['finalResult'], resultJSON.Unknown[0], data.text);
+                
+                if (resultJSON.Unknown[1] !== undefined) {
+                    await ctx.reply(`Окей, прекрасно, теперь пожалуйста, напишите значение для поля "${resultJSON.Unknown[1]}"`);
+                    await set('state')('DetailFix');
+                }
+                else{
+                    await ctx.reply("Отлично, теперь все поля заполнены! Теперь подтврдите постинг");
+                    await PostSummary(user['photos'], set, ctx, user['finalResult'], { missedField: resultJSON.Unknown[0], value: data.text });
+                }
+            }
+            else {
+                await ctx.reply("Крайне удивительно, вам очень повезло! Все поля заполнены! Теперь подтврдите постинг");
+                await PostSummary(user['photos'], set, ctx, user['finalResult'], { missedField: resultJSON.Unknown[0], value: data.text });
+            }
+        }
+        else ctx.reply("Извините, но здесь можно только текстом, воизбежание ошибок");
+    })
 }

@@ -3,3 +3,6 @@ export type UserScriptState =
   | "LoadMoreImages?"
   | "LoadMoreImages"
   | "PostHanlder"
+  | "AddDetails?"
+  | "AddDetails"
+  | "DetailFix"
