@@ -5,6 +5,7 @@ import Context from "telegraf/typings/context";
 import keyboards from "../keyboards";
 import UnknownFieldHandler from "../../base/unknownFieldHanlder";
 import PostSummary, { result } from "../../base/postSummary";
+import PostToWeb from "../../base/webposting";
 
 const mediaGroupBuffer = new Map<
   string,
@@ -321,6 +322,8 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
     onTextMessage('PostHanlder', async (ctx, user, set, data) => {
         switch (data.text) {
             case "Да":
+                const dataToPost = JSON.parse(user['finalResult']),
+                    dataTP = dataToPost.Valid;
                 if (user['photos']){
                     await ctx.telegram.sendMediaGroup(
                         "@test_channel_for_carposting",
@@ -335,6 +338,19 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                     );
                 }
                 else await ctx.telegram.sendMessage('@test_channel_for_carposting', user.finalResult, {parse_mode: 'HTML'});
+
+                await PostToWeb({
+                    photos: user['photos'].split(",").filter(item => item !== ""),
+                    "Body type": dataTP["Body type"],
+                    "Fuel type": dataTP["Fuel type"],
+                    "Transmission": dataTP["Transmission"],
+                    Year: dataTP.Year,
+                    Mileage: dataTP.Mileage,
+                    Price: dataTP.Price,
+                    Make: dataTP.Make,
+                    Model: dataTP.Model,
+                    Trim: dataTP.Trim
+                })
 
                 await set('photos')('');
                 await set('textContent')('');

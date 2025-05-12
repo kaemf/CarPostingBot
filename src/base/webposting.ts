@@ -3,135 +3,124 @@ import FormData from "form-data";
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
+import { WebPosting } from "../data/types";
+import { downloadTelegramFile } from "./gpt";
+import GetAxonomy from "../data/slugs";
 
 dotenv.config();
 
-// === НАСТРОЙКИ ===
-const AUTH = { username: 'wp_user', password: 'app_password' };
-
-// Типы
-type TaxonomyTerm = {
-  slug: string;
-  name: string;
+const AUTH = {
+  username: process.env.WP_USER!,
+  password: process.env.WP_PASS!,
 };
 
-type Car = {
-  title: string;
-  content: string;
-  status?: 'publish' | 'draft';
-  images: string[];
-  taxonomies: Record<string, TaxonomyTerm>;
-  meta: Record<string, string>;
-};
+const URL = {
+  POST: `${process.env.WP_URL}${process.env.WP_POST_URL}`,
+  UPLOAD_MEDIA: `${process.env.WP_URL}${process.env.WP_UPLOAD_MEDIA_URL}`,
+}
+
+function PrepareDataForPosting(data: WebPosting.DataPrepareType): WebPosting.Car {
+  return {
+    post_thumbnail: data.post_meta.gallery[0],
+    taxonomies: {
+      make: {term_id: data.taxonomies.make},
+      bodytype: { term_id: data.taxonomies.bodytype },
+      'fuel-type': { term_id: data.taxonomies['fuel-type'] },
+      transmission: { term_id: data.taxonomies.transmission },
+    },
+    post_meta: {
+      gallery: data.post_meta.gallery,
+      Year: [data.post_meta.Year],
+      Mileage: [data.post_meta.Mileage],
+      Price: [data.post_meta.Price],
+      Model: [data.post_meta.Model],
+      Trim: [data.post_meta.Trim]
+    },
+  }
+}
 
 // Пример массива машин
-const cars: Car[] = [
-  {
-    title: '2025 Mercedes-Benz SL43 AMG Roadster',
-    content: '<p>Эксклюзивный родстер Mercedes-Benz…</p>',
-    status: 'publish',
-    images: ['./img/2003.jpg', './img/2004.jpg'],
-    taxonomies: {
-      make: { slug: 'mercedes-benz', name: 'Mercedes-Benz' },
-      colour: { slug: 'white', name: 'White' },
-      bodytype: { slug: 'convertible', name: 'Convertible' },
-      'fuel-type': { slug: 'gasoline', name: 'Gasoline' },
-      transmission: { slug: 'automatic', name: 'Automatic' },
-    },
-    meta: {
-      Year: '2025',
-      Mileage: '14',
-      Price: '162646',
-      Model: 'SL43',
-      Trim: 'AMG ROADSTER',
-    },
-  },
-];
+// const cars: WebPosting.Car[] = [
+//   {
+//     post_thumbnail: 2090,
+//     taxonomies: {
+//       make: {term_id: 9},
+//       bodytype: { term_id: 68 },
+//       'fuel-type': { term_id: 76 },
+//       transmission: { term_id: 77 },
+//     },
+//     post_meta: {
+//       gallery: [2090, 2091, 2092],
+//       Year: ['2025'],
+//       Mileage: ['14'],
+//       Price: ['162646'],
+//       Model: ['SL43'],
+//       Trim: ['AMG ROADSTER']
+//     },
+//   },
+// ];
 
-// === Функция загрузки одной картинки ===
-async function uploadMedia(filePath: string): Promise<number> {
-  const form = new FormData();
-  form.append('file', fs.createReadStream(filePath));
-
-  const headers = form.getHeaders();
-
-  const res = await axios.post(`${API_BASE}/media`, form, {
-    auth: AUTH,
-    headers: {
-      ...headers,
-      'Content-Disposition': `attachment; filename="${path.basename(filePath)}"`,
-    },
-  });
-
-  return res.data.id;
-}
-
-// === Функция «получить или создать» термин в таксономии ===
-async function ensureTerm(taxonomy: string, slug: string, name: string): Promise<number> {
+async function uploadMedia(fileId: string): Promise<number | undefined> {
   try {
-    const res = await axios.get(`${API_BASE}/${taxonomy}`, {
+    const form = new FormData(),
+      filePath = await downloadTelegramFile(fileId, 'temp');
+    form.append('file', fs.createReadStream(filePath));
+  
+    const headers = form.getHeaders();
+  
+    const res = await axios.post(URL.UPLOAD_MEDIA, form, {
       auth: AUTH,
-      params: { slug },
+      headers: {
+        ...headers,
+        'Content-Disposition': `attachment; filename="${path.basename(filePath)}"`,
+      },
     });
-
-    if (res.data.length) {
-      return res.data[0].id;
-    }
-  } catch (error) {
-    console.error(`Ошибка при проверке термина: ${taxonomy}/${slug}`, error);
+  
+     fs.unlink(filePath, (err) => {
+        if (err) {
+          console.error(`Error deleting file: ${err}`);
+        } else {
+          console.log(`File ${filePath} deleted.`);
+        }
+    });
+  
+    return res.data.id;
+  } catch (error: any) {
+    console.error(error);
   }
-
-  // Создаём термин, если не найден
-  const createRes = await axios.post(`${API_BASE}/${taxonomy}`, {
-    name,
-    slug,
-  }, { auth: AUTH });
-
-  return createRes.data.id;
 }
 
-// === Обработка одной машины ===
-async function processCar(car: Car): Promise<void> {
-  // 1) Загрузить все картинки
-  const mediaIds: number[] = [];
-
-  for (const img of car.images) {
-    const id = await uploadMedia(img);
-    mediaIds.push(id);
-  }
-
-  // 2) Обработать все таксономии
-  const taxIds: Record<string, number> = {};
-
-  for (const [tax, { slug, name }] of Object.entries(car.taxonomies)) {
-    taxIds[tax] = await ensureTerm(tax, slug, name);
-  }
-
-  // 3) Собрать тело запроса
-  const postData = {
-    title: car.title,
-    content: car.content,
-    status: car.status || 'draft',
-    featured_media: mediaIds[0] || undefined,
-    ...Object.fromEntries(
-      Object.entries(taxIds).map(([tax, id]) => [tax, [id]])
-    ),
-    meta: car.meta,
-  };
-
-  // 4) Создать пост
-  const postRes = await axios.post(`${API_BASE}/posts`, postData, { auth: AUTH });
-
-  console.log(`Пост создан: ${postRes.data.link}`);
-}
-
-// === Главная точка ===
-(async () => {
-  for (const car of cars) {
-    try {
-      await processCar(car);
-    } catch (err: any) {
-      console.error('Ошибка при публикации', car.title, err.response?.data || err.message);
+export default async function PostToWeb(car: WebPosting.InputWebPosting): Promise<void> {
+  try{
+    const mediaIds: number[] = [];
+  
+    for (const img of car.photos) {
+      const id = await uploadMedia(img);
+      mediaIds.push(id!);
     }
+  
+    const postData = PrepareDataForPosting({
+      post_thumbnail: mediaIds[0],
+      post_meta: {
+        gallery: mediaIds,
+        Year: car.Year,
+        Mileage: car.Mileage,
+        Price: car.Price,
+        Model: car.Model,
+        Trim: car.Trim
+      },
+      taxonomies: {
+        make: GetAxonomy(car.Make),
+        bodytype: GetAxonomy(car["Body type"]),
+        'fuel-type': GetAxonomy(car["Fuel type"]),
+        transmission: GetAxonomy(car.Transmission),
+      },
+    });
+  
+    const postRes = await axios.post(URL.POST, postData, { auth: AUTH });
+  
+    console.log(`Пост создан: ${postRes.data.link}`);
+  } catch (error: any) {
+    console.error(error);
   }
-})();
+}

@@ -14,7 +14,6 @@ Make: ${data.Make ?? additional.value}
 Model: ${data.Model ?? additional.value}
 Trim: ${data.Trim ?? additional.value}
 Fuel type: ${data["Fuel type"] ?? additional.value}
-Exterior Colour: ${data["Exterior Colour"] ?? additional.value}
 Transmission: ${data.Transmission ?? additional.value}`
 }
 
