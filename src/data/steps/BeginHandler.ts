@@ -37,70 +37,191 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
         }
         else if (CheckException.PhotoException(data)) {
             const mediaGroupId = data.photo[2];
+            const photo = data.photo[0];
+            const caption = data.photo[1] || "";
+    
+            const getCleanPhotos = (photos: string) =>
+                photos.split(",").filter((item: string) => item !== "");
+    
+            const redisPhotos = getCleanPhotos(user['photos']);
+            const redisPhotosCount = redisPhotos.length;
+    
+            const allBufferPhotos = Array.from(mediaGroupBuffer.values()).flatMap(e => e.photos);
+            const allBufferCaptions = Array.from(mediaGroupBuffer.values()).flatMap(e => e.captions);
+            const allBufferCount = allBufferPhotos.length;
+    
+            const totalPhotoCount = redisPhotosCount + allBufferCount;
+            console.log(redisPhotosCount);
+            console.log(mediaGroupBuffer);
+            console.log(totalPhotoCount);
 
             if (!mediaGroupId) {
-                await set('textContent')(data.photo[1] || "");
-                await set('photos')(data.photo[0]);
+                await set('textContent')(caption);
+                await set('photos')(photo);
 
-                await ctx.reply(`Фотография успешно записана, вы можете загрузить ещё 9 фотографий, желаете загрузить ещё?`, keyboards.yesNo());
+                await ctx.reply(
+                    `Фотография успешно записана, вы можете загрузить ещё 9 фотографий, желаете загрузить ещё?`,
+                    keyboards.yesNo()
+                );
 
-                await set('state')('LoadMoreImages?');
-                return;
+                return await set('state')('LoadMoreImages?');
             }
-            
+
+            // if (mediaGroupBuffer.has(mediaGroupId)) {
+            //     const entry = mediaGroupBuffer.get(mediaGroupId)!;
+            //     const allEntries = Array.from(mediaGroupBuffer.values());
+            //     const allPhotos = allEntries.flatMap(e => e.photos);
+            //     const allCaptions = allEntries.flatMap(e => e.captions);
+            //     const currentTotal = allPhotos.length;
+
+            //     // Только если есть место — добавляем фото
+            //     if (currentTotal < MAX_PHOTOS) {
+            //         entry.photos.push({ fileId: photo });
+            //         entry.captions.push(caption);
+            //     }
+
+            //     clearTimeout(entry.timeout);
+            //     entry.timeout = setTimeout(async () => {
+            //         const user_photos = await redis.get(ctx.chat?.id ?? -1)("photos");
+            //         const user_captions = await redis.get(ctx.chat?.id ?? -1)("textContent");
+
+            //         const existingPhotos = user_photos?.split(",").filter((p: string) => p !== "") ?? [];
+            //         const existingCaptions = user_captions?.split(",") ?? [];
+
+            //         const allPhotos = Array.from(mediaGroupBuffer.values()).flatMap(e => e.photos);
+            //         const allCaptions = Array.from(mediaGroupBuffer.values()).flatMap(e => e.captions);
+
+            //         const availableSlots = MAX_PHOTOS - existingPhotos.length;
+
+            //         const trimmedPhotos = allPhotos.slice(0, availableSlots).map(p => p.fileId);
+            //         const trimmedCaptions = allCaptions.slice(0, availableSlots);
+
+            //         const finalPhotos = [...existingPhotos, ...trimmedPhotos];
+            //         const finalCaptions = [...existingCaptions, ...trimmedCaptions];
+
+            //         await set("photos")(finalPhotos.join(","));
+            //         await set("textContent")(finalCaptions.join(","));
+
+            //         if (finalPhotos.length == MAX_PHOTOS) {
+            //             await ctx.reply(`Фотографии успешно записаны, но возможно не все, т.к. вы превысили лимит в ${MAX_PHOTOS} фотографий`);
+            //             await ctx.reply("Желаете добавить/дополнить детали?", keyboards.yesNo());
+            //             await set("state")("AddDetails?");
+            //         } else if (finalPhotos.length < MAX_PHOTOS) {
+            //             const remaining = MAX_PHOTOS - finalPhotos.length;
+            //             await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${remaining} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
+            //             await set("state")("LoadMoreImages?");
+            //         }
+
+            //         mediaGroupBuffer.clear();
+            //     }, 1500);
+            // } else {
+            //     const timeout = setTimeout(async () => {
+            //         const entry = mediaGroupBuffer.get(mediaGroupId);
+            //         if (!entry) return;
+
+            //         const user_photos = await redis.get(ctx.chat?.id ?? -1)("photos");
+            //         const user_captions = await redis.get(ctx.chat?.id ?? -1)("textContent");
+
+            //         const existingPhotos = user_photos?.split(",").filter((p: string) => p !== "") ?? [];
+            //         const existingCaptions = user_captions?.split(",") ?? [];
+
+            //         const availableSlots = MAX_PHOTOS - existingPhotos.length;
+
+            //         const trimmedPhotos = entry.photos.slice(0, availableSlots).map(p => p.fileId);
+            //         const trimmedCaptions = entry.captions.slice(0, availableSlots);
+
+            //         const finalPhotos = [...existingPhotos, ...trimmedPhotos];
+            //         const finalCaptions = [...existingCaptions, ...trimmedCaptions];
+
+            //         await set("photos")(finalPhotos.join(","));
+            //         await set("textContent")(finalCaptions.join(","));
+
+            //         if (finalPhotos.length >= MAX_PHOTOS) {
+            //             await ctx.reply(`Фотографии успешно записаны, но возможно не все, т.к. вы превысили лимит в ${MAX_PHOTOS} фотографий`);
+            //             await ctx.reply("Желаете добавить/дополнить детали?", keyboards.yesNo());
+            //             await set("state")("AddDetails?");
+            //         } else {
+            //             const remaining = MAX_PHOTOS - finalPhotos.length;
+            //             await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${remaining} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
+            //             await set("state")("LoadMoreImages?");
+            //         }
+
+            //         mediaGroupBuffer.clear();
+            //     }, 1500);
+
+            //     mediaGroupBuffer.set(mediaGroupId, {
+            //         photos: [{ fileId: photo }],
+            //         captions: [caption],
+            //         timeout,
+            //         ctx
+            //     });
+            // }
+
             if (mediaGroupBuffer.has(mediaGroupId)) {
                 const entry = mediaGroupBuffer.get(mediaGroupId)!;
-                const photo = data.photo[0];
-
-                if (user['photos'].split(",").length + entry.photos.length <= 9){
+    
+                if (totalPhotoCount < 10) {
+                    console.log(`Added, while ${totalPhotoCount}`)
                     entry.photos.push({ fileId: photo });
-                    entry.captions.push(data.photo[1] || "");
-                } 
-
-                const missedPhotos = user['photos'].split(",").length + entry.photos.length == 10;
-
+                    entry.captions.push(caption);
+                }
+    
+                const missedPhotos = redisPhotosCount + entry.photos.length >= 10;
+    
                 clearTimeout(entry.timeout);
                 entry.timeout = setTimeout(async () => {
-                    const images = entry.photos;
-                    await set('textContent')(entry.captions.join(","));
-                    await set('photos')(images.map(item => item.fileId).join(","));
-                    if (missedPhotos){
-                        await ctx.reply(`Фотографии успешно записаны, но не все, т.к. вы превысили лимит в 10 фотографий`);
+                    const finalRedisPhotos = getCleanPhotos(await redis.get(ctx.chat?.id ?? -1)('photos'));
+                    const finalPhotos = finalRedisPhotos.concat(entry.photos.map(p => p.fileId));
+                    const finalCaptions = user['textContent'].split(",").concat(entry.captions);
+    
+                    await set('textContent')(finalCaptions.join(","));
+                    await set('photos')(finalPhotos.join(","));
+    
+                    const total = finalPhotos.length;
+                    const remaining = Math.max(0, 10 - total);
+    
+                    if (total == 10) {
+                        await ctx.reply(`Фотографии успешно записаны, но возможно не все, т.к. вы превысили лимит в 10 фотографий`);
                         await ctx.reply("Желаете добавить/дополнить детали?", keyboards.yesNo());
-                        await set('state')('AddDetails?');
+                        await set("state")("AddDetails?");
+                    } else if (total < 10) {
+                        await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${remaining} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
+                        await set("state")("LoadMoreImages?");
                     }
-                    else{
-                        await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${10 - images.length} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
-
-                        await set('state')('LoadMoreImages?');
-                    }
-                    // const result = await analyzeImages(images.map(item => item.fileId), entry.captions.join("\n"));
-                    // await entry.ctx.reply(result || "Error while processing photo group");
-                    mediaGroupBuffer.delete(mediaGroupId);
+    
+                    mediaGroupBuffer.clear();
                 }, 1500);
             } else {
-                const photo = data.photo[0];
-                const timeout = setTimeout(async () => {
-                    const entry = mediaGroupBuffer.get(mediaGroupId);
-                    if (entry) {
-                        await set('textContent')(entry.captions.join(","));
-                        await set('photos')(entry.photos.map(item => item.fileId).join(","));
-                        await ctx.reply(`!Фотографии успешно записаны, вы можете загрузить ещё ${10 - user['photos'].split(",").length} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
-
-                        await set('state')('LoadMoreImages?');
-                        // const result = await analyzeImages(entry.photos.map(item => item.fileId), entry.captions.join("\n"));
-                        // await entry.ctx.reply(result || "Error while processing photo group");
-                        mediaGroupBuffer.delete(mediaGroupId);
-                    }
-                }, 1500);
-            
-                mediaGroupBuffer.set(mediaGroupId, {
-                    photos: [{ fileId: photo }],
-                    timeout,
-                    captions: [data.photo[1] || ""],
-                    ctx
-                });
+                if (totalPhotoCount < 10) {
+                    const timeout = setTimeout(async () => {
+                        const entry = mediaGroupBuffer.get(mediaGroupId);
+                        if (entry) {
+                            const redisPhotosFinal = getCleanPhotos(user['photos']);
+                            const newPhotos = redisPhotosFinal.concat(entry.photos.map(p => p.fileId));
+                            const remaining = Math.max(0, 10 - newPhotos.length);
+        
+                            await set('textContent')(
+                                user['textContent'].split(",").concat(entry.captions).join(",")
+                            );
+                            await set('photos')(
+                                user['photos'].split(",").concat(entry.photos.map(p => p.fileId)).join(",")
+                            );
+        
+                            await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${remaining} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
+                            await set('state')('LoadMoreImages?');
+                            mediaGroupBuffer.clear();
+                        }
+                    }, 1500);
+        
+                    mediaGroupBuffer.set(mediaGroupId, {
+                        photos: [{ fileId: photo }],
+                        timeout,
+                        captions: [caption],
+                        ctx
+                    });
+                }
             }
+            
         }
         else if (CheckException.TextException(data)) {
             await set('textAlreadyExists')('true');
@@ -119,87 +240,15 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                 await set('state')('LoadMoreImages');
                 break;
             case 'Нет':
-                const pre_mes = await ctx.reply(`Хорошо, записали, обрабатываем...`);
-
-                if (user['textAlreadyExists'] === 'true'){
-                    const result = await analyzeImages(user['photos'].split(","), user['textContent']);
-                    
-                    if (result){
-                        await set('finalResult')(result);
-                        
-                        const resultJSON = JSON.parse(result);
-                        if (resultJSON.Unknown.length > 0) {
-                            await ctx.reply("Ну... как всегда без чуда, есть детали, которые вам нужно вручную заполнить, ну что же, давайте начнем.");
-                            await ctx.reply(`Пожалуйста, напишите значение для поля "${resultJSON.Unknown[0]}"`);
-                            await set('state')('DetailFix');
-                        }
-                        else {
-                            await ctx.reply("Крайне удивительно, вам очень повезло! Все поля заполнены! Теперь подтврдите постинг");
-                            await PostSummary(user['photos'], set, ctx, result, { missedField: resultJSON.Unknown[0], value: data.text });
-                        }
-                    }
-                    else await ctx.reply("Извините, но произошла ошибка, попробуйте ещё раз сначала");
+                if (!user['photos'].split(",").filter(item => item !== "").length){
+                    await ctx.reply('О как. Вы не загрузили ни одну фотографию, у нас так не принято, поэтому... если что максимум 10');
+                    await set('state')('LoadMoreImages');
                 }
-                else {
-                    await ctx.reply("Желаете добавить/дополнить детали?", keyboards.yesNo());
-                    await set('state')('AddDetails?');
-                }
-                // const result = await analyzeImages(user['photos'].split(","), user['textContent']);
-                // if (result){
-                //     await set('finalResult')(result);
-
-                //     if (user['photos'].split(",").length){
-                //         await ctx.replyWithMediaGroup(user['photos'].split(",").map((item, index) => ({ 
-                //             type: "photo", media: item, ...(index === 0 ? { caption: result, parse_mode: "HTML" } : {})
-                //         })));
+                else{
+                    const pre_mes = await ctx.reply(`Хорошо, записали, обрабатываем...`);
     
-                //         await ctx.reply("Постить?", {
-                //             parse_mode: 'HTML',
-                //             reply_markup: {
-                //                 keyboard: [
-                //                     [{ text: 'Да' }, { text: 'Нет' }]
-                //                 ]
-                //             }
-                //         });
-                //     }
-                //     else await ctx.reply(`${result}\n\nПостить?`, {
-                //         parse_mode: 'HTML',
-                //         reply_markup: {
-                //             keyboard: [
-                //                 [{ text: 'Да' }, { text: 'Нет' }]
-                //             ]
-                //         }
-                //     });
-
-                //     await set('state')('PostHanlder');
-                // }
-                // else ctx.reply(result || "Ошибка обработки, нажмите старт чтобы попробовать снова");
-
-                await ctx.deleteMessage(pre_mes.message_id);
-
-                break;
-
-            default:
-                await ctx.reply(`Вам нужно выбрать одну из кнопок, прежде чем продолжить`);
-        }
-    })
-
-    onTextMessage('LoadMoreImages', async (ctx, user, set, data) => {
-        if (CheckException.PhotoException(data)) {
-            const mediaGroupId = data.photo[2];
-
-            if (!mediaGroupId) {
-                const images = user['photos'].split(",");
-
-                if (images.length > 10) {
-                    await ctx.reply("Вы не можете загрузить еще фотографии, т.к. вы достигли лимита в 10 фотографий");
-                }
-                else if (images.length == 9) {
-                    await set('textContent')(user['textContent'].split(",").concat(data.photo[1] || "").join(","));
-                    await set('photos')(user['photos'].split(",").concat(data.photo[0]).join(","));
-
                     if (user['textAlreadyExists'] === 'true'){
-                        const result = await analyzeImages(user['photos'].split(","), user['textContent']);
+                        const result = await analyzeImages(user['photos'].split(",").filter(item => item !== ""), user['textContent']);
                         
                         if (result){
                             await set('finalResult')(result);
@@ -221,99 +270,170 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                         await ctx.reply("Желаете добавить/дополнить детали?", keyboards.yesNo());
                         await set('state')('AddDetails?');
                     }
-                }
-                else if (images.length <= 8) {
-                    await set('textContent')(user['textContent'].split(",").concat(data.photo[1] || "").join(","));
-                    await set('photos')(user['photos'].split(",").concat(data.photo[0]).join(","));
 
-                    await ctx.reply(`Вы можете загрузить ещё ${10 - images.length} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
-
-                    await set('state')('LoadMoreImages?');
+                    await ctx.deleteMessage(pre_mes.message_id);
                 }
 
-                return;
+                break;
+
+            default:
+                await ctx.reply(`Вам нужно выбрать одну из кнопок, прежде чем продолжить`);
+        }
+    })
+
+    onTextMessage('LoadMoreImages', async (ctx, user, set, data) => {
+        if (CheckException.PhotoException(data)){
+            const mediaGroupId = data.photo[2];
+            const photo = data.photo[0];
+            const caption = data.photo[1] || "";
+    
+            const getCleanPhotos = (photos: string) =>
+                photos.split(",").filter((item: string) => item !== "");
+    
+            const redisPhotos = getCleanPhotos(user['photos']);
+            const redisPhotosCount = redisPhotos.length;
+    
+            const allBufferPhotos = Array.from(mediaGroupBuffer.values()).flatMap(e => e.photos);
+            const allBufferCaptions = Array.from(mediaGroupBuffer.values()).flatMap(e => e.captions);
+            const allBufferCount = allBufferPhotos.length;
+    
+            const totalPhotoCount = redisPhotosCount + allBufferCount;
+    
+            if (!mediaGroupId) {
+                if (redisPhotosCount >= 10) {
+                    return await ctx.reply("Вы не можете загрузить еще фотографии, т.к. вы достигли лимита в 10 фотографий");
+                }
+    
+                await set('textContent')(
+                    user['textContent'].split(",").concat(caption).join(",")
+                );
+                await set('photos')(
+                    user['photos'].split(",").concat(photo).join(",")
+                );
+    
+                const updatedPhotos = getCleanPhotos(user['photos']).concat([photo]);
+    
+                if (updatedPhotos.length === 10) {
+                    if (user['textAlreadyExists'] === 'true') {
+                        const result = await analyzeImages(updatedPhotos, user['textContent']);
+                        if (result) {
+                            await set('finalResult')(result);
+                            const resultJSON = JSON.parse(result);
+                            if (resultJSON.Unknown.length > 0) {
+                                await ctx.reply("Ну... как всегда без чуда, есть детали, которые вам нужно вручную заполнить, ну что же, давайте начнем.");
+                                await ctx.reply(`Пожалуйста, напишите значение для поля "${resultJSON.Unknown[0]}"`);
+                                return await set('state')('DetailFix');
+                            } else {
+                                await ctx.reply("Крайне удивительно, вам очень повезло! Все поля заполнены! Теперь подтврдите постинг");
+                                return await PostSummary(updatedPhotos.join(","), set, ctx, result, {
+                                    missedField: "",
+                                    value: data.text
+                                });
+                            }
+                        } else {
+                            return await ctx.reply("Извините, но произошла ошибка, попробуйте ещё раз сначала");
+                        }
+                    } else {
+                        await ctx.reply("Желаете добавить/дополнить детали?", keyboards.yesNo());
+                        return await set('state')('AddDetails?');
+                    }
+                } else {
+                    const remaining = 10 - updatedPhotos.length;
+                    await ctx.reply(`Вы можете загрузить ещё ${remaining} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
+                    return await set('state')('LoadMoreImages?');
+                }
             }
-            
+    
             if (mediaGroupBuffer.has(mediaGroupId)) {
                 const entry = mediaGroupBuffer.get(mediaGroupId)!;
-                const images = entry.photos;
-                const photo = data.photo[0];
-
-                if (user['photos'].split(",").length + images.length <= 9) {
+    
+                if (totalPhotoCount < 10) {
                     entry.photos.push({ fileId: photo });
-                    entry.captions.push(data.photo[1] || "");
+                    entry.captions.push(caption);
                 }
-
-                const missedPhotos = user['photos'].split(",").length + images.length == 10;
-
+    
+                const missedPhotos = redisPhotosCount + entry.photos.length >= 10;
+    
                 clearTimeout(entry.timeout);
                 entry.timeout = setTimeout(async () => {
-                    await set('textContent')(user['textContent'].split(",").concat(entry.captions).join(","));
-                    await set('photos')(user['photos'].split(",").concat(images.map(item => item.fileId)).join(","));
-                    if (missedPhotos){
-                        await ctx.reply(`Фотографии успешно записаны, но не все, т.к. вы превысили лимит в 10 фотографий`);
-                        if (user['textAlreadyExists'] === 'true'){
-                            const result = await analyzeImages(user['photos'].split(","), user['textContent']);
-                            
-                            if (result){
+                    const finalRedisPhotos = getCleanPhotos(await redis.get(ctx.chat?.id ?? -1)('photos'));
+                    const finalPhotos = finalRedisPhotos.concat(entry.photos.map(p => p.fileId));
+                    const finalCaptions = user['textContent'].split(",").concat(entry.captions);
+    
+                    await set('textContent')(finalCaptions.join(","));
+                    await set('photos')(finalPhotos.join(","));
+    
+                    const total = finalPhotos.length;
+                    const remaining = Math.max(0, 10 - total);
+    
+                    if (total == 10) {
+                        await ctx.reply(`Фотографии успешно записаны, но возможно не все, т.к. вы превысили лимит в 10 фотографий`);
+                        if (user['textAlreadyExists'] === 'true') {
+                            const result = await analyzeImages(finalPhotos, user['textContent']);
+                            if (result) {
                                 await set('finalResult')(result);
-                                
                                 const resultJSON = JSON.parse(result);
                                 if (resultJSON.Unknown.length > 0) {
                                     await ctx.reply("Ну... как всегда без чуда, есть детали, которые вам нужно вручную заполнить, ну что же, давайте начнем.");
                                     await ctx.reply(`Пожалуйста, напишите значение для поля "${resultJSON.Unknown[0]}"`);
-                                    await set('state')('DetailFix');
-                                }
-                                else {
+                                    return await set('state')('DetailFix');
+                                } else {
                                     await ctx.reply("Крайне удивительно, вам очень повезло! Все поля заполнены! Теперь подтврдите постинг");
-                                    await PostSummary(user['photos'], set, ctx, result, { missedField: resultJSON.Unknown[0], value: data.text });
+                                    return await PostSummary(finalPhotos.join(","), set, ctx, result, {
+                                        missedField: "",
+                                        value: data.text
+                                    });
                                 }
+                            } else {
+                                return await ctx.reply("Извините, но произошла ошибка, попробуйте ещё раз сначала");
                             }
-                            else await ctx.reply("Извините, но произошла ошибка, попробуйте ещё раз сначала");
-                        }
-                        else {
+                        } else {
                             await ctx.reply("Желаете добавить/дополнить детали?", keyboards.yesNo());
-                            await set('state')('AddDetails?');
+                            return await set('state')('AddDetails?');
                         }
-                    }
-                    else{
-                        await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${10 - (user['photos'].split(",").filter(item => item !== "").length + images.length)} фотографий, желаете загрузить ещё?`, keyboards.yesNo()); // ${10 - (user['photos'].split(",").length + images.length)} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
-
+                    } else if (total < 10) {
+                        await ctx.reply(`(${total})Фотографии успешно записаны, вы можете загрузить ещё ${remaining} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
                         await set('state')('LoadMoreImages?');
                     }
-                    // const result = await analyzeImages(images.map(item => item.fileId), entry.captions.join("\n"));
-                    // await entry.ctx.reply(result || "Error while processing photo group");
-                    mediaGroupBuffer.delete(mediaGroupId);
+    
+                    mediaGroupBuffer.clear();
                 }, 1500);
             } else {
-                const photo = data.photo[0];
                 const timeout = setTimeout(async () => {
                     const entry = mediaGroupBuffer.get(mediaGroupId);
                     if (entry) {
-                        await set('textContent')(user['textContent'].split(",").concat(entry.captions).join(",") || entry.captions.join(","));
-                        await set('photos')(user['photos'].split(",").concat(entry.photos.map(item => item.fileId)).join(",") || entry.photos.map(item => item.fileId).join(","));
-                        await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${10 - user['photos'].split(",").filter(item => item !== "").length + entry.photos.length} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
-                        // const result = await analyzeImages(entry.photos.map(item => item.fileId), entry.captions.join("\n"));
-                        // await entry.ctx.reply(result || "Error while processing photo group");
-                        mediaGroupBuffer.delete(mediaGroupId);
+                        const redisPhotosFinal = getCleanPhotos(user['photos']);
+                        const newPhotos = redisPhotosFinal.concat(entry.photos.map(p => p.fileId));
+                        const remaining = Math.max(0, 10 - newPhotos.length);
+    
+                        await set('textContent')(
+                            user['textContent'].split(",").concat(entry.captions).join(",")
+                        );
+                        await set('photos')(
+                            user['photos'].split(",").concat(entry.photos.map(p => p.fileId)).join(",")
+                        );
+    
+                        await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${remaining} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
                         await set('state')('LoadMoreImages?');
+                        mediaGroupBuffer.clear();
                     }
                 }, 1500);
-            
+    
                 mediaGroupBuffer.set(mediaGroupId, {
                     photos: [{ fileId: photo }],
                     timeout,
-                    captions: [data.photo[1] || ""],
+                    captions: [caption],
                     ctx
                 });
             }
         }
-    })
+        else ctx.reply("Извините, но произошла ошибка, здесь нужно грузить изображения, а не вот, да...")
+    });
 
     onTextMessage('PostHanlder', async (ctx, user, set, data) => {
         switch (data.text) {
             case "Да":
-                const dataToPost = JSON.parse(user['finalResult']),
+                const dataToPost = JSON.parse(await redis.get(ctx.chat?.id ?? -1)('finalResult')),
                     dataTP = dataToPost.Valid;
                 if (user['photos']){
                     await ctx.telegram.sendMediaGroup(

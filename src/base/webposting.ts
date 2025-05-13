@@ -39,27 +39,6 @@ function PrepareDataForPosting(data: WebPosting.DataPrepareType): WebPosting.Car
   }
 }
 
-// Пример массива машин
-// const cars: WebPosting.Car[] = [
-//   {
-//     post_thumbnail: 2090,
-//     taxonomies: {
-//       make: {term_id: 9},
-//       bodytype: { term_id: 68 },
-//       'fuel-type': { term_id: 76 },
-//       transmission: { term_id: 77 },
-//     },
-//     post_meta: {
-//       gallery: [2090, 2091, 2092],
-//       Year: ['2025'],
-//       Mileage: ['14'],
-//       Price: ['162646'],
-//       Model: ['SL43'],
-//       Trim: ['AMG ROADSTER']
-//     },
-//   },
-// ];
-
 async function uploadMedia(fileId: string): Promise<string | undefined> {
   try {
     const form = new FormData(),
@@ -77,11 +56,11 @@ async function uploadMedia(fileId: string): Promise<string | undefined> {
     });
   
      fs.unlink(filePath, (err) => {
-        if (err) {
-          console.error(`Error deleting file: ${err}`);
-        } else {
-          console.log(`File ${filePath} deleted.`);
-        }
+      if (err) {
+        console.error(`Error deleting file: ${err}`);
+      } else {
+        console.log(`File ${filePath} deleted.`);
+      }
     });
   
     return (res.data.id).toString();
