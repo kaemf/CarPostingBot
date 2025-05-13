@@ -21,7 +21,7 @@ const URL = {
 
 function PrepareDataForPosting(data: WebPosting.DataPrepareType): WebPosting.Car {
   return {
-    post_thumbnail: data.post_meta.gallery[0],
+    post_thumbnail: parseInt(data.post_meta.gallery[0]),
     taxonomies: {
       make: {term_id: data.taxonomies.make},
       bodytype: { term_id: data.taxonomies.bodytype },
@@ -29,7 +29,7 @@ function PrepareDataForPosting(data: WebPosting.DataPrepareType): WebPosting.Car
       transmission: { term_id: data.taxonomies.transmission },
     },
     post_meta: {
-      gallery: data.post_meta.gallery,
+      gallery: [(data.post_meta.gallery).join(',')],
       Year: [data.post_meta.Year],
       Mileage: [data.post_meta.Mileage],
       Price: [data.post_meta.Price],
@@ -60,7 +60,7 @@ function PrepareDataForPosting(data: WebPosting.DataPrepareType): WebPosting.Car
 //   },
 // ];
 
-async function uploadMedia(fileId: string): Promise<number | undefined> {
+async function uploadMedia(fileId: string): Promise<string | undefined> {
   try {
     const form = new FormData(),
       filePath = await downloadTelegramFile(fileId, 'temp');
@@ -84,7 +84,7 @@ async function uploadMedia(fileId: string): Promise<number | undefined> {
         }
     });
   
-    return res.data.id;
+    return (res.data.id).toString();
   } catch (error: any) {
     console.error(error);
   }
@@ -92,7 +92,7 @@ async function uploadMedia(fileId: string): Promise<number | undefined> {
 
 export default async function PostToWeb(car: WebPosting.InputWebPosting): Promise<void> {
   try{
-    const mediaIds: number[] = [];
+    const mediaIds: string[] = [];
   
     for (const img of car.photos) {
       const id = await uploadMedia(img);
@@ -100,7 +100,7 @@ export default async function PostToWeb(car: WebPosting.InputWebPosting): Promis
     }
   
     const postData = PrepareDataForPosting({
-      post_thumbnail: mediaIds[0],
+      post_thumbnail: parseInt(mediaIds[0]),
       post_meta: {
         gallery: mediaIds,
         Year: car.Year,

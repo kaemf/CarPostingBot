@@ -66,25 +66,8 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                     await set('photos')(images.map(item => item.fileId).join(","));
                     if (missedPhotos){
                         await ctx.reply(`Фотографии успешно записаны, но не все, т.к. вы превысили лимит в 10 фотографий`);
-                        const pre_mes = await ctx.reply('Обработка, пожалуйста, подождите...');
-                        const result = await analyzeImages(images.map(item => item.fileId), entry.captions.join("\n"));
-                        await ctx.deleteMessage(pre_mes.message_id);
-
-                        if (result){
-                            await set('finalResult')(result);
-                                
-                            const resultJSON = JSON.parse(result);
-                            if (resultJSON.Unknown.length > 0) {
-                                await ctx.reply("Ну... как всегда без чуда, есть детали, которые вам нужно вручную заполнить, ну что же, давайте начнем.");
-                                await ctx.reply(`Пожалуйста, напишите значение для поля "${resultJSON.Unknown[0]}"`);
-                                await set('state')('DetailFix');
-                            }
-                            else {
-                                await ctx.reply("Крайне удивительно, вам очень повезло! Все поля заполнены! Теперь подтврдите постинг");
-                                await PostSummary(user['photos'], set, ctx, result, { missedField: resultJSON.Unknown[0], value: data.text });
-                            }
-                        }
-                        else await ctx.reply("Ошибка обработки, нажмите старт чтобы попробовать снова");
+                        await ctx.reply("Желаете добавить/дополнить детали?", keyboards.yesNo());
+                        await set('state')('AddDetails?');
                     }
                     else{
                         await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${10 - images.length} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
@@ -215,25 +198,29 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                     await set('textContent')(user['textContent'].split(",").concat(data.photo[1] || "").join(","));
                     await set('photos')(user['photos'].split(",").concat(data.photo[0]).join(","));
 
-                    const pre_mes = await ctx.reply("Отлично, все доступные фотографии собраны, теперь подтвердите постинг, обработка...");
-                    const result = await analyzeImages(user['photos'].split(",").concat(data.photo[0]), user['textContent'].split(",").concat(data.photo[1] || "").join(","));
-                    await ctx.deleteMessage(pre_mes.message_id);
-
-                    if (result){
-                        await set('finalResult')(result);
+                    if (user['textAlreadyExists'] === 'true'){
+                        const result = await analyzeImages(user['photos'].split(","), user['textContent']);
+                        
+                        if (result){
+                            await set('finalResult')(result);
                             
-                        const resultJSON = JSON.parse(result);
-                        if (resultJSON.Unknown.length > 0) {
-                            await ctx.reply("Ну... как всегда без чуда, есть детали, которые вам нужно вручную заполнить, ну что же, давайте начнем.");
-                            await ctx.reply(`Пожалуйста, напишите значение для поля "${resultJSON.Unknown[0]}"`);
-                            await set('state')('DetailFix');
+                            const resultJSON = JSON.parse(result);
+                            if (resultJSON.Unknown.length > 0) {
+                                await ctx.reply("Ну... как всегда без чуда, есть детали, которые вам нужно вручную заполнить, ну что же, давайте начнем.");
+                                await ctx.reply(`Пожалуйста, напишите значение для поля "${resultJSON.Unknown[0]}"`);
+                                await set('state')('DetailFix');
+                            }
+                            else {
+                                await ctx.reply("Крайне удивительно, вам очень повезло! Все поля заполнены! Теперь подтврдите постинг");
+                                await PostSummary(user['photos'], set, ctx, result, { missedField: resultJSON.Unknown[0], value: data.text });
+                            }
                         }
-                        else {
-                            await ctx.reply("Крайне удивительно, вам очень повезло! Все поля заполнены! Теперь подтврдите постинг");
-                            await PostSummary(user['photos'], set, ctx, result, { missedField: resultJSON.Unknown[0], value: data.text });
-                        }
+                        else await ctx.reply("Извините, но произошла ошибка, попробуйте ещё раз сначала");
                     }
-                    else await ctx.reply("Ошибка обработки, нажмите /start чтобы попробовать снова");
+                    else {
+                        await ctx.reply("Желаете добавить/дополнить детали?", keyboards.yesNo());
+                        await set('state')('AddDetails?');
+                    }
                 }
                 else if (images.length <= 8) {
                     await set('textContent')(user['textContent'].split(",").concat(data.photo[1] || "").join(","));
@@ -265,25 +252,29 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                     await set('photos')(user['photos'].split(",").concat(images.map(item => item.fileId)).join(","));
                     if (missedPhotos){
                         await ctx.reply(`Фотографии успешно записаны, но не все, т.к. вы превысили лимит в 10 фотографий`);
-                        const pre_mes = await ctx.reply('Обработка, пожалуйста, подождите...');
-                        const result = await analyzeImages(images.map(item => item.fileId), entry.captions.join("\n"));
-                        await ctx.deleteMessage(pre_mes.message_id);
-
-                        if (result){
-                            await set('finalResult')(result);
+                        if (user['textAlreadyExists'] === 'true'){
+                            const result = await analyzeImages(user['photos'].split(","), user['textContent']);
+                            
+                            if (result){
+                                await set('finalResult')(result);
                                 
-                            const resultJSON = JSON.parse(result);
-                            if (resultJSON.Unknown.length > 0) {
-                                await ctx.reply("Ну... как всегда без чуда, есть детали, которые вам нужно вручную заполнить, ну что же, давайте начнем.");
-                                await ctx.reply(`Пожалуйста, напишите значение для поля "${resultJSON.Unknown[0]}"`);
-                                await set('state')('DetailFix');
+                                const resultJSON = JSON.parse(result);
+                                if (resultJSON.Unknown.length > 0) {
+                                    await ctx.reply("Ну... как всегда без чуда, есть детали, которые вам нужно вручную заполнить, ну что же, давайте начнем.");
+                                    await ctx.reply(`Пожалуйста, напишите значение для поля "${resultJSON.Unknown[0]}"`);
+                                    await set('state')('DetailFix');
+                                }
+                                else {
+                                    await ctx.reply("Крайне удивительно, вам очень повезло! Все поля заполнены! Теперь подтврдите постинг");
+                                    await PostSummary(user['photos'], set, ctx, result, { missedField: resultJSON.Unknown[0], value: data.text });
+                                }
                             }
-                            else {
-                                await ctx.reply("Крайне удивительно, вам очень повезло! Все поля заполнены! Теперь подтврдите постинг");
-                                await PostSummary(user['photos'], set, ctx, result, { missedField: resultJSON.Unknown[0], value: data.text });
-                            }
+                            else await ctx.reply("Извините, но произошла ошибка, попробуйте ещё раз сначала");
                         }
-                        else await ctx.reply("Ошибка обработки, нажмите старт чтобы попробовать снова");
+                        else {
+                            await ctx.reply("Желаете добавить/дополнить детали?", keyboards.yesNo());
+                            await set('state')('AddDetails?');
+                        }
                     }
                     else{
                         await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${10 - (user['photos'].split(",").filter(item => item !== "").length + images.length)} фотографий, желаете загрузить ещё?`, keyboards.yesNo()); // ${10 - (user['photos'].split(",").length + images.length)} фотографий, желаете загрузить ещё?`, keyboards.yesNo());

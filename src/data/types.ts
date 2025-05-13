@@ -8,7 +8,7 @@ export namespace WebPosting {
     };
 
     type PostMetaPrepare = {
-        gallery: number[];
+        gallery: string[];
         Year: string;
         Mileage: string;
         Price: string;

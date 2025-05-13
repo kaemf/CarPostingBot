@@ -26,6 +26,30 @@ function promptJSON(question?: string){
     ]
   }
 
+  Пример текстового вида ввода:
+  FOR SALE:  2026 CADILLAC VISTIQ SPORT
+  ( Electric) 
+
+  ODOMETER: 8 km 
+
+  PRICE: $97300 plus taxes
+
+  И пример ответа:
+  {
+    "Valid": {
+      Year: "2026",
+      Make: "Cadillac",
+      Model: "Vistiq",
+      Trim: "Sport",
+      "Body type": "SUV",
+      Transmission: "Automatic",
+      "Fuel type": "Electric",
+      Mileage: "8",
+      Price: "97300"
+    },
+    "Unknown": []
+  }
+
   ❗️Допустимы только два корневых ключа: "Valid" и "Unknown".  
   Никаких других слов, пояснений или форматирования. Ответ — строго JSON.
 
@@ -68,7 +92,7 @@ function promptJSON(question?: string){
   - Model
   - Trim
   - Fuel type
-  - Transmission
+  - Transmission (Она всегда Automatic)
 
   Если значение поля не входит в эти списки (для Fuel type или Transmission) — не добавляй его в "Valid", а перемести поле в "Unknown".
 
