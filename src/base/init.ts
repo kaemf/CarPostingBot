@@ -1,4 +1,4 @@
-// CarPostingBot Test Task
+// CarPostingBot
 // Developed by Yaroslav Volkivskyi (TheLaidSon)
 
 // Initialization File
@@ -10,7 +10,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export default async function init() {
-  console.log(`\n\n  Car Posting Bot Test Task v1.0\n\n   Developed by Yaroslav Volkivskyi (TheLaidSon)\n\n`)
+  console.log(`\n\n  Car Posting Bot v1.0\n\n   Developed by Yaroslav Volkivskyi (TheLaidSon)\n\n`)
   console.log("Creating redis client...");
   const redis = createClient({url: process.env.REDIS_URL});
   redis.on("error", (err) => console.log("Redis Client Error", err));

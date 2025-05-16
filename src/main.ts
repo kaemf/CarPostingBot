@@ -1,4 +1,4 @@
-// CarPostingBot Test Task
+// CarPostingBot
 // Developed by Yaroslav Volkivskyi (TheLaidSon)
 
 // Actual v1.0

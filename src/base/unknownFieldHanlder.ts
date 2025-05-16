@@ -1,5 +1,4 @@
 export default async function UnknownFieldHandler(set: any, inputResultFinalJSON: string, workWithField: string, value: string) {
-    console.log(`UnknownFieldHandler: ${workWithField} = ${value}`);
     const data = JSON.parse(inputResultFinalJSON);
 
     data.Valid[workWithField] = value;

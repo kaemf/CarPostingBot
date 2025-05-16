@@ -4,7 +4,7 @@ import { analyzeImages, transcribeAudio } from "../../base/gpt";
 import Context from "telegraf/typings/context";
 import keyboards from "../keyboards";
 import UnknownFieldHandler from "../../base/unknownFieldHanlder";
-import PostSummary, { result } from "../../base/postSummary";
+import PostSummary from "../../base/postSummary";
 import PostToWeb from "../../base/webposting";
 
 const mediaGroupBuffer = new Map<
@@ -47,13 +47,9 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
             const redisPhotosCount = redisPhotos.length;
     
             const allBufferPhotos = Array.from(mediaGroupBuffer.values()).flatMap(e => e.photos);
-            const allBufferCaptions = Array.from(mediaGroupBuffer.values()).flatMap(e => e.captions);
             const allBufferCount = allBufferPhotos.length;
     
             const totalPhotoCount = redisPhotosCount + allBufferCount;
-            console.log(redisPhotosCount);
-            console.log(mediaGroupBuffer);
-            console.log(totalPhotoCount);
 
             if (!mediaGroupId) {
                 await set('textContent')(caption);
@@ -67,106 +63,13 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                 return await set('state')('LoadMoreImages?');
             }
 
-            // if (mediaGroupBuffer.has(mediaGroupId)) {
-            //     const entry = mediaGroupBuffer.get(mediaGroupId)!;
-            //     const allEntries = Array.from(mediaGroupBuffer.values());
-            //     const allPhotos = allEntries.flatMap(e => e.photos);
-            //     const allCaptions = allEntries.flatMap(e => e.captions);
-            //     const currentTotal = allPhotos.length;
-
-            //     // Только если есть место — добавляем фото
-            //     if (currentTotal < MAX_PHOTOS) {
-            //         entry.photos.push({ fileId: photo });
-            //         entry.captions.push(caption);
-            //     }
-
-            //     clearTimeout(entry.timeout);
-            //     entry.timeout = setTimeout(async () => {
-            //         const user_photos = await redis.get(ctx.chat?.id ?? -1)("photos");
-            //         const user_captions = await redis.get(ctx.chat?.id ?? -1)("textContent");
-
-            //         const existingPhotos = user_photos?.split(",").filter((p: string) => p !== "") ?? [];
-            //         const existingCaptions = user_captions?.split(",") ?? [];
-
-            //         const allPhotos = Array.from(mediaGroupBuffer.values()).flatMap(e => e.photos);
-            //         const allCaptions = Array.from(mediaGroupBuffer.values()).flatMap(e => e.captions);
-
-            //         const availableSlots = MAX_PHOTOS - existingPhotos.length;
-
-            //         const trimmedPhotos = allPhotos.slice(0, availableSlots).map(p => p.fileId);
-            //         const trimmedCaptions = allCaptions.slice(0, availableSlots);
-
-            //         const finalPhotos = [...existingPhotos, ...trimmedPhotos];
-            //         const finalCaptions = [...existingCaptions, ...trimmedCaptions];
-
-            //         await set("photos")(finalPhotos.join(","));
-            //         await set("textContent")(finalCaptions.join(","));
-
-            //         if (finalPhotos.length == MAX_PHOTOS) {
-            //             await ctx.reply(`Фотографии успешно записаны, но возможно не все, т.к. вы превысили лимит в ${MAX_PHOTOS} фотографий`);
-            //             await ctx.reply("Желаете добавить/дополнить детали?", keyboards.yesNo());
-            //             await set("state")("AddDetails?");
-            //         } else if (finalPhotos.length < MAX_PHOTOS) {
-            //             const remaining = MAX_PHOTOS - finalPhotos.length;
-            //             await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${remaining} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
-            //             await set("state")("LoadMoreImages?");
-            //         }
-
-            //         mediaGroupBuffer.clear();
-            //     }, 1500);
-            // } else {
-            //     const timeout = setTimeout(async () => {
-            //         const entry = mediaGroupBuffer.get(mediaGroupId);
-            //         if (!entry) return;
-
-            //         const user_photos = await redis.get(ctx.chat?.id ?? -1)("photos");
-            //         const user_captions = await redis.get(ctx.chat?.id ?? -1)("textContent");
-
-            //         const existingPhotos = user_photos?.split(",").filter((p: string) => p !== "") ?? [];
-            //         const existingCaptions = user_captions?.split(",") ?? [];
-
-            //         const availableSlots = MAX_PHOTOS - existingPhotos.length;
-
-            //         const trimmedPhotos = entry.photos.slice(0, availableSlots).map(p => p.fileId);
-            //         const trimmedCaptions = entry.captions.slice(0, availableSlots);
-
-            //         const finalPhotos = [...existingPhotos, ...trimmedPhotos];
-            //         const finalCaptions = [...existingCaptions, ...trimmedCaptions];
-
-            //         await set("photos")(finalPhotos.join(","));
-            //         await set("textContent")(finalCaptions.join(","));
-
-            //         if (finalPhotos.length >= MAX_PHOTOS) {
-            //             await ctx.reply(`Фотографии успешно записаны, но возможно не все, т.к. вы превысили лимит в ${MAX_PHOTOS} фотографий`);
-            //             await ctx.reply("Желаете добавить/дополнить детали?", keyboards.yesNo());
-            //             await set("state")("AddDetails?");
-            //         } else {
-            //             const remaining = MAX_PHOTOS - finalPhotos.length;
-            //             await ctx.reply(`Фотографии успешно записаны, вы можете загрузить ещё ${remaining} фотографий, желаете загрузить ещё?`, keyboards.yesNo());
-            //             await set("state")("LoadMoreImages?");
-            //         }
-
-            //         mediaGroupBuffer.clear();
-            //     }, 1500);
-
-            //     mediaGroupBuffer.set(mediaGroupId, {
-            //         photos: [{ fileId: photo }],
-            //         captions: [caption],
-            //         timeout,
-            //         ctx
-            //     });
-            // }
-
             if (mediaGroupBuffer.has(mediaGroupId)) {
                 const entry = mediaGroupBuffer.get(mediaGroupId)!;
     
                 if (totalPhotoCount < 10) {
-                    console.log(`Added, while ${totalPhotoCount}`)
                     entry.photos.push({ fileId: photo });
                     entry.captions.push(caption);
                 }
-    
-                const missedPhotos = redisPhotosCount + entry.photos.length >= 10;
     
                 clearTimeout(entry.timeout);
                 entry.timeout = setTimeout(async () => {
@@ -294,7 +197,6 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
             const redisPhotosCount = redisPhotos.length;
     
             const allBufferPhotos = Array.from(mediaGroupBuffer.values()).flatMap(e => e.photos);
-            const allBufferCaptions = Array.from(mediaGroupBuffer.values()).flatMap(e => e.captions);
             const allBufferCount = allBufferPhotos.length;
     
             const totalPhotoCount = redisPhotosCount + allBufferCount;
@@ -351,8 +253,6 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
                     entry.photos.push({ fileId: photo });
                     entry.captions.push(caption);
                 }
-    
-                const missedPhotos = redisPhotosCount + entry.photos.length >= 10;
     
                 clearTimeout(entry.timeout);
                 entry.timeout = setTimeout(async () => {
@@ -435,20 +335,20 @@ export default async function BeginHandler(onTextMessage: Message, redis: any) {
             case "Да":
                 const dataToPost = JSON.parse(await redis.get(ctx.chat?.id ?? -1)('finalResult')),
                     dataTP = dataToPost.Valid;
-                if (user['photos']){
-                    await ctx.telegram.sendMediaGroup(
-                        "@test_channel_for_carposting",
-                        user['photos'].split(",").filter(item => item !== "").map((item, index) => ({
-                          type: "photo",
-                          media: item,
-                          ...(index === 0 ? {
-                            caption: result(user['finalResult'], { missedField: "", value: user['textContent'] }),
-                            parse_mode: "HTML"
-                          } : {})
-                        }))
-                    );
-                }
-                else await ctx.telegram.sendMessage('@test_channel_for_carposting', user.finalResult, {parse_mode: 'HTML'});
+                // if (user['photos']){
+                //     await ctx.telegram.sendMediaGroup(
+                //         "@test_channel_for_carposting",
+                //         user['photos'].split(",").filter(item => item !== "").map((item, index) => ({
+                //           type: "photo",
+                //           media: item,
+                //           ...(index === 0 ? {
+                //             caption: result(user['finalResult'], { missedField: "", value: user['textContent'] }),
+                //             parse_mode: "HTML"
+                //           } : {})
+                //         }))
+                //     );
+                // }
+                // else await ctx.telegram.sendMessage('@test_channel_for_carposting', user.finalResult, {parse_mode: 'HTML'});
 
                 await PostToWeb({
                     photos: user['photos'].split(",").filter(item => item !== ""),

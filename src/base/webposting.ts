@@ -96,9 +96,9 @@ export default async function PostToWeb(car: WebPosting.InputWebPosting): Promis
       },
     });
   
-    const postRes = await axios.post(URL.POST, postData, { auth: AUTH });
+    await axios.post(URL.POST, postData, { auth: AUTH });
   
-    console.log(`Пост создан: ${postRes.data.link}`);
+    console.log(`Post successfully created`);
   } catch (error: any) {
     console.error(error);
   }
